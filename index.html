@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Non-Euclidean Geometry Lab</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+    </script>
+</head>
+<body>
+    <div id="ui-layer">
+        <div class="panel">
+            <h1>Non-Euclidean Lab</h1>
+            <p>Explore curved spaces in real-time.</p>
+            
+            <div class="control-group">
+                <label for="scene-select">Environment</label>
+                <select id="scene-select">
+                    <option value="1">Forest & Torus</option>
+                    <option value="0">Standard Cube</option>
+                    <option value="2">Parallel Lines</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="curvature">Curvature</label>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; opacity: 0.8; margin-bottom: 4px;">
+                    <span>Slider: <span id="curvature-val">0</span></span>
+                    <span>True: <span id="true-curvature-val">0</span></span>
+                </div>
+                <input type="range" id="curvature" min="-1" max="1" step="0.01" value="0">
+            </div>
+
+            <div class="metrics">
+                <h3>Triangle Angle Sum</h3>
+                <div class="angle-val" id="angle-sum">180°</div>
+            </div>
+
+            <div class="instructions">
+                <ul>
+                    <li><strong>WASD:</strong> Move</li>
+                    <li><strong>Mouse:</strong> Look</li>
+                    <li><strong>Space/Shift:</strong> Fly Up/Down</li>
+                    <li><strong>+/-:</strong> Adjust Curvature</li>
+                    <li><strong>Click:</strong> Lock pointer / Drag point</li>
+                    <li><strong>TAB:</strong> Toggle 2D Map</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div id="crosshair"></div>
+        
+        <div id="fps-counter">FPS: 0</div>
+    </div>
+    
+    <div id="map-container" class="hidden">
+        <!-- The 2D projection map will be rendered here by a separate WebGL pass -->
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
