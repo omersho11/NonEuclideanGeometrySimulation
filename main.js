@@ -16,7 +16,6 @@ renderer.setClearColor(0x0a0c10);
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x0a0c10, 0.05);
 
 // Main Camera
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -25,6 +24,7 @@ camera.position.set(0, 1.5, 5);
 // Map Camera (Orthographic)
 const mapCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
 mapCamera.position.set(0, 20, 0);
+mapCamera.up.set(0, 0, -1);
 mapCamera.lookAt(0, 0, 0);
 
 // --- Controls ---
@@ -66,52 +66,60 @@ document.addEventListener('keyup', (e) => {
 const nonEuclideanShader = {
     uniforms: {
         u_curvature: { value: 0.0 },
+        u_playerPos: { value: new THREE.Vector3(0, 0, 0) },
         color: { value: new THREE.Color(0x3b82f6) }
     },
     vertexShader: `
         uniform float u_curvature;
+        uniform vec3 u_playerPos;
         varying vec3 vWorldPosition;
-        varying float vDistance;
 
         void main() {
-            vec3 pos = position;
-            float r = length(pos);
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vec3 relativePos = worldPosition.xyz - u_playerPos;
+            
+            float r = length(relativePos);
             
             if (r > 0.0001) {
                 if (u_curvature > 0.0) {
                     float k_sqrt = sqrt(u_curvature);
                     float scale = sin(r * k_sqrt) / (r * k_sqrt);
-                    pos.x *= scale;
-                    pos.z *= scale;
+                    relativePos *= scale;
                 } else if (u_curvature < 0.0) {
                     float k_sqrt = sqrt(-u_curvature);
                     float scale = sinh(r * k_sqrt) / (r * k_sqrt);
-                    pos.x *= scale;
-                    pos.z *= scale;
+                    relativePos *= scale;
                 }
             }
             
-            vec4 worldPosition = modelMatrix * vec4(pos, 1.0);
+            worldPosition.xyz = u_playerPos + relativePos;
             vWorldPosition = worldPosition.xyz;
-            vDistance = distance(cameraPosition, worldPosition.xyz);
             
             gl_Position = projectionMatrix * viewMatrix * worldPosition;
         }
     `,
     fragmentShader: `
         uniform vec3 color;
-        varying float vDistance;
         
         void main() {
-            float alpha = 1.0 - smoothstep(15.0, 30.0, vDistance);
-            gl_FragColor = vec4(color, alpha);
+            gl_FragColor = vec4(color, 1.0);
         }
     `,
-    transparent: true,
-    wireframe: true
+    transparent: false,
+    wireframe: false
 };
 
-const customMaterial = new THREE.ShaderMaterial(nonEuclideanShader);
+const customMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        u_curvature: nonEuclideanShader.uniforms.u_curvature,
+        u_playerPos: nonEuclideanShader.uniforms.u_playerPos,
+        color: { value: new THREE.Color(0x3b82f6) }
+    },
+    vertexShader: nonEuclideanShader.vertexShader,
+    fragmentShader: nonEuclideanShader.fragmentShader,
+    transparent: false,
+    wireframe: false
+});
 
 // --- Picking Setup ---
 const pickingScene = new THREE.Scene();
@@ -119,6 +127,7 @@ const pickingTexture = new THREE.WebGLRenderTarget(window.innerWidth, window.inn
 const pickingMaterial = new THREE.ShaderMaterial({
     uniforms: {
         u_curvature: nonEuclideanShader.uniforms.u_curvature,
+        u_playerPos: nonEuclideanShader.uniforms.u_playerPos,
         color: { value: new THREE.Color(0xff0000) } // Overridden per object
     },
     vertexShader: nonEuclideanShader.vertexShader,
@@ -131,20 +140,39 @@ const pickingMaterial = new THREE.ShaderMaterial({
 });
 
 // --- Geometry ---
-// Base Grid
-const gridGeom = new THREE.PlaneGeometry(40, 40, 100, 100);
-gridGeom.rotateX(-Math.PI / 2);
-const grid = new THREE.Mesh(gridGeom, customMaterial);
-scene.add(grid);
+
+// Create solid grid lines instead of a wireframe plane to clearly show curvature without z-fighting
+const lineGeoX = new THREE.BoxGeometry(100, 0.1, 0.1, 200, 1, 1);
+for(let z = -50; z <= 50; z += 5) {
+    const mesh = new THREE.Mesh(lineGeoX, customMaterial);
+    mesh.position.set(0, 0, z);
+    scene.add(mesh);
+}
+const lineGeoZ = new THREE.BoxGeometry(0.1, 0.1, 100, 1, 1, 200);
+for(let x = -50; x <= 50; x += 5) {
+    const mesh = new THREE.Mesh(lineGeoZ, customMaterial);
+    mesh.position.set(x, 0, 0);
+    scene.add(mesh);
+}
 
 // Interactive Triangle Vertices
-const vGeom = new THREE.SphereGeometry(0.2, 16, 16);
-const vMat = new THREE.MeshBasicMaterial({ color: 0xff3366 });
+const vGeom = new THREE.SphereGeometry(0.3, 16, 16);
+const vMat = new THREE.ShaderMaterial({
+    uniforms: {
+        u_curvature: nonEuclideanShader.uniforms.u_curvature,
+        u_playerPos: nonEuclideanShader.uniforms.u_playerPos,
+        color: { value: new THREE.Color(0xff3366) }
+    },
+    vertexShader: nonEuclideanShader.vertexShader,
+    fragmentShader: nonEuclideanShader.fragmentShader,
+    transparent: false,
+    wireframe: false
+});
 
 const points = [
-    new THREE.Vector3(0, 0, -3),
-    new THREE.Vector3(-3, 0, 3),
-    new THREE.Vector3(3, 0, 3)
+    new THREE.Vector3(0, 0.1, -5),
+    new THREE.Vector3(-5, 0.1, 5),
+    new THREE.Vector3(5, 0.1, 5)
 ];
 
 const idToObject = {};
@@ -172,6 +200,7 @@ const spheres = points.map((p, index) => {
 const lineMat = new THREE.ShaderMaterial({
     uniforms: {
         u_curvature: nonEuclideanShader.uniforms.u_curvature,
+        u_playerPos: nonEuclideanShader.uniforms.u_playerPos,
         color: { value: new THREE.Color(0xffaa00) }
     },
     vertexShader: nonEuclideanShader.vertexShader,
@@ -204,54 +233,12 @@ const lines = [
 ];
 lines.forEach(l => scene.add(l));
 
-// --- Architectural Scene ---
-// Add pillars to explore and visualize curvature
-const pillarGeom = new THREE.BoxGeometry(1, 15, 1, 10, 50, 10);
-const pillarMat = new THREE.ShaderMaterial({
-    uniforms: {
-        u_curvature: nonEuclideanShader.uniforms.u_curvature,
-        color: { value: new THREE.Color(0x10b981) } // Emerald green
-    },
-    vertexShader: nonEuclideanShader.vertexShader,
-    fragmentShader: nonEuclideanShader.fragmentShader,
-    transparent: true,
-    wireframe: true
-});
-
-for (let r = 5; r <= 30; r += 5) {
-    const numPillars = r * 2;
-    for (let i = 0; i < numPillars; i++) {
-        const angle = (i / numPillars) * Math.PI * 2;
-        const p = new THREE.Mesh(pillarGeom, pillarMat);
-        p.position.set(Math.cos(angle) * r, 7.5, Math.sin(angle) * r);
-        scene.add(p);
-    }
-}
-
-// Add a central floating ring
-const ringGeom = new THREE.TorusGeometry(8, 0.5, 16, 100);
-ringGeom.rotateX(Math.PI / 2);
-const ringMat = new THREE.ShaderMaterial({
-    uniforms: {
-        u_curvature: nonEuclideanShader.uniforms.u_curvature,
-        color: { value: new THREE.Color(0xa855f7) } // Purple
-    },
-    vertexShader: nonEuclideanShader.vertexShader,
-    fragmentShader: nonEuclideanShader.fragmentShader,
-    transparent: true,
-    wireframe: true
-});
-const centralRing = new THREE.Mesh(ringGeom, ringMat);
-centralRing.position.set(0, 15, 0);
-scene.add(centralRing);
-
-// Collect all materials that need curvature updates
+// Collect all materials that need curvature and player pos updates
 const materialsToUpdate = [
     customMaterial, 
     pickingMaterial, 
     lineMat, 
-    pillarMat, 
-    ringMat,
+    vMat,
     idToObject[1].picking.material, 
     idToObject[2].picking.material, 
     idToObject[3].picking.material
@@ -278,11 +265,6 @@ function updateLines() {
 // Calculate Angle Sum based on Curvature
 const angleSumElement = document.getElementById('angle-sum');
 function updateAngleSum() {
-    // In a flat plane (curvature = 0), sum is 180.
-    // In Hyperbolic (K < 0), sum is < 180 (approaches 0).
-    // In Spherical (K > 0), sum is > 180 (approaches 540).
-    // A mathematically sound approach involves the Gauss-Bonnet theorem: Area * K = Sum - Pi.
-    // We approximate the Euclidean area of the base points first:
     const a = points[0].distanceTo(points[1]);
     const b = points[1].distanceTo(points[2]);
     const c = points[2].distanceTo(points[0]);
@@ -292,7 +274,6 @@ function updateAngleSum() {
     const sumRadians = Math.PI + (curvature * area);
     let sumDegrees = sumRadians * (180 / Math.PI);
     
-    // Clamp to logical constraints for simple visualization
     if (sumDegrees < 0) sumDegrees = 0;
     if (sumDegrees > 540) sumDegrees = 540;
     
@@ -309,7 +290,6 @@ curvatureInput.addEventListener('input', (e) => {
     curvature = parseFloat(e.target.value);
     curvatureVal.textContent = curvature.toFixed(2);
     
-    // Update curvature uniform on all custom materials
     materialsToUpdate.forEach(m => {
         if (m && m.uniforms && m.uniforms.u_curvature) {
             m.uniforms.u_curvature.value = curvature;
@@ -321,7 +301,6 @@ curvatureInput.addEventListener('input', (e) => {
 
 // --- Interaction (Dragging) ---
 let draggedObjectId = null;
-let hoveredObjectId = null;
 let isDragging = false;
 const mouse = new THREE.Vector2();
 
@@ -331,12 +310,7 @@ container.addEventListener('mousemove', (e) => {
     
     if (isDragging && draggedObjectId) {
         const obj = idToObject[draggedObjectId];
-        // Move the point based on mouse delta.
-        // We calculate a ray intersection with the Y=0 plane to find the world position.
-        // For simplicity in this demo, since moving the mouse in screen space corresponds
-        // to moving the point on the ground plane relative to the camera:
         
-        // Use standard Raycaster for Euclidean ground plane intersection
         const raycaster = new THREE.Raycaster();
         const normMouse = new THREE.Vector2(
             (e.clientX / window.innerWidth) * 2 - 1,
@@ -344,15 +318,17 @@ container.addEventListener('mousemove', (e) => {
         );
         raycaster.setFromCamera(normMouse, camera);
         
-        // Plane at Y=0
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
         const target = new THREE.Vector3();
         raycaster.ray.intersectPlane(plane, target);
         
         if (target) {
             points[obj.index].copy(target);
+            points[obj.index].y = 0.1; // keep slightly above ground
             obj.visual.position.copy(target);
+            obj.visual.position.y = 0.1;
             obj.picking.position.copy(target);
+            obj.picking.position.y = 0.1;
             updateLines();
             updateAngleSum();
         }
@@ -360,31 +336,23 @@ container.addEventListener('mousemove', (e) => {
 });
 
 container.addEventListener('mousedown', (e) => {
-    // Read pixel from picking texture
     renderer.setRenderTarget(pickingTexture);
     renderer.clear();
     renderer.render(pickingScene, camera);
     
     const pixelBuffer = new Uint8Array(4);
     const gl = renderer.getContext();
-    // Read the exact pixel
     const x = e.clientX;
     const y = window.innerHeight - e.clientY;
     gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelBuffer);
     
     renderer.setRenderTarget(null);
     
-    // The ID was encoded into the color directly (e.g. ID 1 = Color(1), which is #000001, so R=1, G=0, B=0 roughly)
-    // Wait, THREE.Color(1) means r=1, g=1, b=1? No, THREE.Color(integer) interprets it as a hex code.
-    // ID 1 -> 0x000001 -> r=0, g=0, b=1.
-    // So the ID is basically the B channel, or B + G*256 + R*65536.
     const id = (pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2]);
     
     if (id > 0 && idToObject[id]) {
-        // Clicked a point!
         draggedObjectId = id;
         isDragging = true;
-        // Don't lock controls if we clicked a point
         e.stopPropagation();
     }
 });
@@ -394,21 +362,18 @@ container.addEventListener('mouseup', () => {
     draggedObjectId = null;
 });
 
-// Update standard click to lock controls, but ensure we don't lock if dragging
 container.addEventListener('click', (e) => {
     if (!controls.isLocked && !isDragging && !draggedObjectId) {
         controls.lock();
     }
 });
 
-// Remove old click listener that was unconditionally locking
-// (It's replaced by the one above)
-
 // --- Resize ---
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    pickingTexture.setSize(window.innerWidth, window.innerHeight);
 });
 
 // --- Render Loop ---
@@ -421,23 +386,29 @@ function animate() {
 
     // Movement
     if (controls.isLocked) {
-        direction.z = Number(moveState.forward) - Number(moveState.backward);
+        // Fix for W and S being swapped
+        direction.z = Number(moveState.backward) - Number(moveState.forward);
         direction.x = Number(moveState.right) - Number(moveState.left);
-        direction.normalize(); // consistent movement in all directions
+        direction.normalize(); 
 
         const speed = 5.0;
         if (moveState.forward || moveState.backward) controls.moveForward(direction.z * speed * delta);
         if (moveState.left || moveState.right) controls.moveRight(direction.x * speed * delta);
         
-        // Keep to ground roughly
         camera.position.y = 1.5;
     }
+
+    // Update player position uniform for shaders
+    materialsToUpdate.forEach(m => {
+        if (m && m.uniforms && m.uniforms.u_playerPos) {
+            m.uniforms.u_playerPos.value.copy(camera.position);
+        }
+    });
 
     // 1. Render Main Scene
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissorTest(false);
     
-    // Continuous hover check for pointer
     if (!controls.isLocked && !isDragging) {
         renderer.setRenderTarget(pickingTexture);
         renderer.clear();
@@ -460,10 +431,8 @@ function animate() {
 
     // 2. Render Map (if visible)
     if (mapVisible) {
-        // We set viewport and scissor to the map container's rect
         const rect = mapContainer.getBoundingClientRect();
         
-        // Convert to WebGL coordinates (bottom-left origin)
         const x = rect.left;
         const y = window.innerHeight - rect.bottom;
         const w = rect.width;
@@ -473,14 +442,15 @@ function animate() {
         renderer.setScissor(x, y, w, h);
         renderer.setScissorTest(true);
         
-        // Adjust map camera aspect and render
+        // Make the map camera follow the player to show the projection at their position
+        mapCamera.position.set(camera.position.x, 20, camera.position.z);
+        
         mapCamera.left = -w/20;
         mapCamera.right = w/20;
         mapCamera.top = h/20;
         mapCamera.bottom = -h/20;
         mapCamera.updateProjectionMatrix();
         
-        // Clear depth so map renders on top
         renderer.clearDepth();
         renderer.render(scene, mapCamera);
     }

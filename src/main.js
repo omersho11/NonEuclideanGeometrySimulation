@@ -3,13 +3,34 @@ import { ControlsManager } from './controls.js';
 import { createCustomMaterial, createPickingMaterial } from './shaders.js';
 import { buildScene } from './scene.js';
 
+// --- Error Overlay ---
+window.addEventListener('error', (e) => {
+    const errDiv = document.createElement('div');
+    errDiv.style.position = 'absolute';
+    errDiv.style.top = '10px';
+    errDiv.style.left = '10px';
+    errDiv.style.color = 'red';
+    errDiv.style.background = 'rgba(0,0,0,0.8)';
+    errDiv.style.padding = '10px';
+    errDiv.style.zIndex = '9999';
+    errDiv.style.fontFamily = 'monospace';
+    errDiv.style.pointerEvents = 'none';
+    errDiv.innerHTML = `<strong>Error:</strong> ${e.message}<br><small>${e.filename}:${e.lineno}</small>`;
+    document.body.appendChild(errDiv);
+});
+
 // --- State ---
 let curvature = 0.0;
+let targetCurvature = 0.0;
 let mapVisible = false;
+let fadeEnabled = true;
 
 // --- Setup ---
 const container = document.body;
 const mapContainer = document.getElementById('map-container');
+const curvatureInput = document.getElementById('curvature');
+const curvatureVal = document.getElementById('curvature-val');
+const trueCurvatureVal = document.getElementById('true-curvature-val');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
@@ -21,7 +42,7 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x0a0c10, 0.05);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 1.5, 5);
+camera.position.set(0, 0, 0);
 
 const mapCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
 mapCamera.position.set(0, 20, 0);
@@ -46,8 +67,100 @@ document.addEventListener('keydown', (e) => {
         let newSlider = e.key === '-' ? currentSlider - step : currentSlider + step;
         newSlider = Math.max(-1, Math.min(1, newSlider));
         curvatureInput.value = newSlider;
-        // Manually trigger the input event
         curvatureInput.dispatchEvent(new Event('input'));
+    }
+
+    if (e.code === 'KeyF') {
+        fadeEnabled = !fadeEnabled;
+        if (fadeEnabled) {
+            scene.fog = new THREE.FogExp2(0x0a0c10, 0.05);
+        } else {
+            scene.fog = null;
+        }
+        materialsToUpdate.forEach(m => {
+            if (m && m.uniforms && m.uniforms.u_fadeEnabled) {
+                m.uniforms.u_fadeEnabled.value = fadeEnabled ? 1.0 : 0.0;
+            }
+        });
+    }
+});
+
+// --- Projectiles ---
+class Projectile {
+    constructor(x, z, height, dx, dz, dy) {
+        this.baseX = x;
+        this.baseZ = z;
+        this.height = height;
+        this.dx = dx;
+        this.dz = dz;
+        this.dy = dy;
+        
+        const geom = new THREE.SphereGeometry(0.4, 16, 16);
+        const mat = createCustomMaterial(0xffffff); // Bright white ball
+        this.mesh = new THREE.Mesh(geom, mat);
+        scene.add(this.mesh);
+        materialsToUpdate.push(mat);
+        this.life = 6.0; // seconds
+    }
+    
+    update(delta) {
+        this.baseX += this.dx * delta;
+        this.baseZ += this.dz * delta;
+        this.height += this.dy * delta;
+        this.dy -= 15.0 * delta; // Gravity
+        
+        if (this.height < 0.4) {
+            this.height = 0.4;
+            this.dy *= -0.6; // Bounce
+            // Apply friction
+            this.dx *= 0.98;
+            this.dz *= 0.98;
+        }
+        
+        // Shader automatically bends the (baseX, height, baseZ) unbent coordinate!
+        this.mesh.position.set(this.baseX, this.height, this.baseZ);
+        this.life -= delta;
+    }
+    
+    destroy() {
+        scene.remove(this.mesh);
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
+        const idx = materialsToUpdate.indexOf(this.mesh.material);
+        if (idx > -1) materialsToUpdate.splice(idx, 1);
+    }
+}
+
+const projectiles = [];
+
+function fireProjectile() {
+    const yaw = camera.rotation.y;
+    const pitch = camera.rotation.x; // positive is looking up
+    
+    const speed = 25.0;
+    const dx = -Math.sin(yaw) * Math.cos(pitch) * speed;
+    const dz = -Math.cos(yaw) * Math.cos(pitch) * speed;
+    const dy = Math.sin(pitch) * speed;
+    
+    // Add velocity of the player for momentum
+    const moveZ = Number(controlsManager.moveState.forward) - Number(controlsManager.moveState.backward);
+    const moveX = Number(controlsManager.moveState.right) - Number(controlsManager.moveState.left);
+    const playerSpeed = 10.0;
+    const pdx = -Math.sin(yaw) * moveZ * playerSpeed + Math.cos(yaw) * moveX * playerSpeed;
+    const pdz = -Math.cos(yaw) * moveZ * playerSpeed - Math.sin(yaw) * moveX * playerSpeed;
+    
+    const p = new Projectile(
+        controlsManager.baseX, 
+        controlsManager.baseZ, 
+        controlsManager.baseHeight, 
+        dx + pdx, dz + pdz, dy
+    );
+    projectiles.push(p);
+}
+
+document.addEventListener('mousedown', (e) => {
+    if (controlsManager.controls.isLocked && e.button === 0) {
+        fireProjectile();
     }
 });
 
@@ -56,9 +169,10 @@ const materialsToUpdate = [];
 const customMaterial = createCustomMaterial(0x3b82f6);
 materialsToUpdate.push(customMaterial);
 
-const gridGeom = new THREE.PlaneGeometry(100, 100, 200, 200); // Larger, higher resolution grid
+const gridGeom = new THREE.PlaneGeometry(800, 800, 400, 400); // Massive grid
 gridGeom.rotateX(-Math.PI / 2);
 const grid = new THREE.Mesh(gridGeom, customMaterial);
+customMaterial.uniforms.u_isGrid = { value: 1.0 }; // Flag to prevent grid from fading
 scene.add(grid);
 
 // --- Picking & Triangle ---
@@ -73,7 +187,8 @@ const points = [
 const idToObject = {};
 
 const vGeom = new THREE.SphereGeometry(0.2, 16, 16);
-const vMat = new THREE.MeshBasicMaterial({ color: 0xff3366 });
+const vMat = createCustomMaterial(0xff3366);
+materialsToUpdate.push(vMat);
 
 points.forEach((p, index) => {
     const s = new THREE.Mesh(vGeom, vMat);
@@ -126,6 +241,26 @@ function updateLines() {
 }
 updateLines();
 
+// --- Map Marker ---
+const mapMarkerGroup = new THREE.Group();
+
+const dotGeo = new THREE.CircleGeometry(1.5, 32);
+const dotMat = new THREE.MeshBasicMaterial({ color: 0xef4444, depthTest: false, side: THREE.DoubleSide, transparent: true, opacity: 1.0 });
+const dot = new THREE.Mesh(dotGeo, dotMat);
+dot.rotation.x = -Math.PI / 2;
+mapMarkerGroup.add(dot);
+
+const arrowGeo = new THREE.ConeGeometry(1.2, 4.0, 16);
+const arrowMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, depthTest: false, side: THREE.DoubleSide, transparent: true, opacity: 1.0 });
+const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+arrow.position.set(0, 0, -2.5);
+arrow.rotation.x = -Math.PI / 2;
+mapMarkerGroup.add(arrow);
+
+mapMarkerGroup.position.set(0, 15, 0); // Elevated higher
+mapMarkerGroup.visible = false; // Hide from main camera
+scene.add(mapMarkerGroup);
+
 // --- Architectural Scene Loading ---
 const activeSceneMeshes = [];
 buildScene(scene, 1, materialsToUpdate, activeSceneMeshes);
@@ -135,6 +270,8 @@ sceneSelect.addEventListener('change', (e) => {
     buildScene(scene, parseInt(e.target.value), materialsToUpdate, activeSceneMeshes);
     updateCurvatureUniforms();
 });
+
+// Sync slider drag to target curvature
 
 // --- Angle Math ---
 const angleSumElement = document.getElementById('angle-sum');
@@ -154,10 +291,26 @@ function updateAngleSum() {
 }
 updateAngleSum();
 
+// --- Environment Colors ---
+function updateEnvironmentColor() {
+    const cFlat = new THREE.Color(0x0a0c10); // Dark neutral
+    const cSphere = new THREE.Color(0x0f172a); // Deep blue night
+    const cHyper = new THREE.Color(0x2e0615); // Deep red/purple void
+    
+    let color = new THREE.Color();
+    if (curvature >= 0) {
+        color.lerpColors(cFlat, cSphere, Math.min(1, curvature * 3.0));
+    } else {
+        color.lerpColors(cFlat, cHyper, Math.min(1, -curvature * 3.0));
+    }
+    
+    renderer.setClearColor(color);
+    if (scene.fog) {
+        scene.fog.color.copy(color);
+    }
+}
+
 // --- Curvature Binding ---
-const curvatureInput = document.getElementById('curvature');
-const curvatureVal = document.getElementById('curvature-val');
-const trueCurvatureVal = document.getElementById('true-curvature-val');
 
 function updateCurvatureUniforms() {
     materialsToUpdate.forEach(m => {
@@ -170,14 +323,11 @@ function updateCurvatureUniforms() {
 curvatureInput.addEventListener('input', (e) => {
     const rawValue = parseFloat(e.target.value);
     // Non-linear mapping: values near 0 change slowly, but grow fast towards the extremes
-    curvature = rawValue * rawValue * rawValue; 
+    targetCurvature = rawValue * rawValue * rawValue; 
     
     // Display raw value and true value on UI
     curvatureVal.textContent = rawValue.toFixed(2); 
-    trueCurvatureVal.textContent = curvature.toFixed(4);
-    
-    updateCurvatureUniforms();
-    updateAngleSum();
+    trueCurvatureVal.textContent = targetCurvature.toFixed(4);
 });
 
 // --- Interaction ---
@@ -261,11 +411,31 @@ function animate() {
         frames = 0;
         lastFpsTime = elapsedTime;
     }
+    
+    // Smooth curvature morphing
+    curvature += (targetCurvature - curvature) * 5.0 * delta;
+    updateCurvatureUniforms(); // Push smoothed value to shaders
+    updateEnvironmentColor();
+    updateAngleSum();
 
     controlsManager.update(delta, curvature);
+    
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.update(delta);
+        if (p.life <= 0) {
+            p.destroy();
+            projectiles.splice(i, 1);
+        }
+    }
+
+    materialsToUpdate.forEach(m => {
+        if (m && m.uniforms && m.uniforms.u_playerBasePos) {
+            m.uniforms.u_playerBasePos.value.set(controlsManager.baseX, controlsManager.baseZ);
+        }
+    });
 
     // Make the grid infinite by snapping its unwarped XZ origin to the player's base grid cell
-    const gridSize = 100;
     const gridStep = 0.5; // Snap interval based on geometry subdivision
     grid.position.x = Math.round(controlsManager.baseX / gridStep) * gridStep;
     grid.position.z = Math.round(controlsManager.baseZ / gridStep) * gridStep;
@@ -290,8 +460,22 @@ function animate() {
 
     // Render Map
     if (mapVisible) {
-        mapCamera.position.x = camera.position.x;
-        mapCamera.position.z = camera.position.z;
+        materialsToUpdate.forEach(m => {
+            if (m && m.uniforms && m.uniforms.u_isMap) {
+                m.uniforms.u_isMap.value = 1.0;
+            }
+        });
+
+        // The map marker and camera track the unbent position (baseX/baseZ)
+        mapMarkerGroup.position.set(controlsManager.baseX, 10, controlsManager.baseZ);
+        const yaw = controlsManager.camera.rotation.y;
+        mapMarkerGroup.rotation.y = yaw;
+
+        mapCamera.position.x = controlsManager.baseX;
+        mapCamera.position.z = controlsManager.baseZ;
+        mapCamera.up.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+        mapCamera.lookAt(controlsManager.baseX, 0, controlsManager.baseZ);
+        
         const rect = mapContainer.getBoundingClientRect();
         const x = rect.left, y = window.innerHeight - rect.bottom, w = rect.width, h = rect.height;
         
@@ -303,8 +487,16 @@ function animate() {
         mapCamera.top = h/20; mapCamera.bottom = -h/20;
         mapCamera.updateProjectionMatrix();
         
+        mapMarkerGroup.visible = true; // Show for map render
         renderer.clearDepth();
         renderer.render(scene, mapCamera);
+        mapMarkerGroup.visible = false; // Hide again
+
+        materialsToUpdate.forEach(m => {
+            if (m && m.uniforms && m.uniforms.u_isMap) {
+                m.uniforms.u_isMap.value = 0.0;
+            }
+        });
     }
 }
 

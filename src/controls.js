@@ -7,10 +7,11 @@ export class ControlsManager {
         this.cameraGroup = new THREE.Group();
         this.cameraGroup.add(this.camera);
         
-        this.controls = new PointerLockControls(this.camera, document.body);
+        this.controls = new PointerLockControls(this.camera, container);
         this.baseHeight = 1.5; // The height of the player above the ground
         this.baseX = 0;
         this.baseZ = 5; // Starting position
+        this.bobTime = 0;
         
         // Initial setup
         this.camera.position.set(0, 0, 0); // Local to group
@@ -24,6 +25,12 @@ export class ControlsManager {
         this.crosshair = document.getElementById('crosshair');
         this.controls.addEventListener('lock', () => this.crosshair.style.display = 'block');
         this.controls.addEventListener('unlock', () => this.crosshair.style.display = 'none');
+
+        container.addEventListener('click', () => {
+            if (!this.controls.isLocked) {
+                this.controls.lock();
+            }
+        });
     }
 
     setupKeyboard() {
@@ -55,8 +62,8 @@ export class ControlsManager {
 
         // Move in the unwarped base plane using the camera's local yaw
         const yaw = this.camera.rotation.y;
-        const dx = Math.sin(yaw) * moveZ * speed * delta + Math.cos(yaw) * moveX * speed * delta;
-        const dz = Math.cos(yaw) * moveZ * speed * delta - Math.sin(yaw) * moveX * speed * delta;
+        const dx = -Math.sin(yaw) * moveZ * speed * delta + Math.cos(yaw) * moveX * speed * delta;
+        const dz = -Math.cos(yaw) * moveZ * speed * delta - Math.sin(yaw) * moveX * speed * delta;
         
         this.baseX += dx;
         this.baseZ += dz;
@@ -81,23 +88,26 @@ export class ControlsManager {
                 const scale = Math.sin(r / R) / (r / R);
                 xp *= scale;
                 zp *= scale;
-                yp = R * (1.0 - Math.cos(r / R));
-                normal.set(-xp, R - yp, -zp).normalize();
+                yp = -R * (1.0 - Math.cos(r / R));
+                normal.set(xp, R + yp, zp).normalize();
             } else if (curvature < 0.0) {
                 const R = 1.0 / Math.sqrt(-curvature);
                 const scale = Math.sinh(r / R) / (r / R);
                 xp *= scale;
                 zp *= scale;
                 yp = R * (Math.cosh(r / R) - 1.0);
-                normal.set(-xp, yp + R, -zp).normalize();
+                normal.set(-xp, R - yp, -zp).normalize();
             }
         }
         
-        // Set camera group position offset by baseHeight along the normal
+        // Remove bobbing effect
+        const bobOffset = 0.0;
+
+        // Set camera group position offset by baseHeight + bobOffset along the normal
         this.cameraGroup.position.set(
-            xp + normal.x * this.baseHeight,
-            yp + normal.y * this.baseHeight,
-            zp + normal.z * this.baseHeight
+            xp + normal.x * (this.baseHeight + bobOffset),
+            yp + normal.y * (this.baseHeight + bobOffset),
+            zp + normal.z * (this.baseHeight + bobOffset)
         );
         
         // Tilt the camera group to stand upright on the surface

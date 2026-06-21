@@ -32,7 +32,10 @@ export function buildScene(scene, index, materialsToUpdate, activeMeshes) {
             const numPillars = r * 2;
             for (let i = 0; i < numPillars; i++) {
                 const angle = (i / numPillars) * Math.PI * 2;
-                const p = new THREE.Mesh(pillarGeom, pillarMat);
+                const color = (i % 2 === 0) ? 0x10b981 : 0x06b6d4; // Alternate Emerald and Cyan
+                const pMat = createCustomMaterial(color);
+                materialsToUpdate.push(pMat);
+                const p = new THREE.Mesh(pillarGeom, pMat);
                 p.position.set(Math.cos(angle) * r, 7.5, Math.sin(angle) * r);
                 scene.add(p);
                 activeMeshes.push(p);
@@ -61,5 +64,54 @@ export function buildScene(scene, index, materialsToUpdate, activeMeshes) {
             scene.add(l);
             activeMeshes.push(l);
         }
+
+        const cubeGeom = new THREE.BoxGeometry(4, 4, 4, 20, 20, 20);
+        const cubeMat = createCustomMaterial(0x3b82f6);
+        materialsToUpdate.push(cubeMat);
+        const cube = new THREE.Mesh(cubeGeom, cubeMat);
+        cube.position.set(0, 4, -15);
+        scene.add(cube);
+        activeMeshes.push(cube);
+        
+    } else if (index === 3) {
+        // Riemann City (Demonstrates multi-sheeted spherical space)
+        // Spaced out along Z axis to show different locations overlapping on the sphere
+        const buildingGeom = new THREE.BoxGeometry(4, 15, 4, 10, 20, 10);
+        
+        const districts = [
+            { z: 0, color: 0xef4444 },    // Red District
+            { z: 80, color: 0x10b981 },   // Green District
+            { z: 160, color: 0x3b82f6 },  // Blue District
+            { z: 240, color: 0xf59e0b }   // Yellow District
+        ];
+        
+        districts.forEach(district => {
+            const dMat = createCustomMaterial(district.color);
+            materialsToUpdate.push(dMat);
+            
+            // Build a small cluster of buildings
+            for (let x = -10; x <= 10; x += 10) {
+                for (let z = -10; z <= 10; z += 10) {
+                    if (x === 0 && z === 0) continue; // Leave center empty
+                    const b = new THREE.Mesh(buildingGeom, dMat);
+                    // Add some height variation
+                    const hOffset = Math.random() * 5;
+                    b.position.set(x, 7.5 + hOffset, district.z + z);
+                    b.scale.y = 1.0 + (hOffset / 15.0);
+                    scene.add(b);
+                    activeMeshes.push(b);
+                }
+            }
+            
+            // Add a central marker for the district
+            const centerGeom = new THREE.TorusGeometry(3, 1, 16, 32);
+            centerGeom.rotateX(Math.PI / 2);
+            const cMat = createCustomMaterial(0xffffff);
+            materialsToUpdate.push(cMat);
+            const center = new THREE.Mesh(centerGeom, cMat);
+            center.position.set(0, 10, district.z);
+            scene.add(center);
+            activeMeshes.push(center);
+        });
     }
 }

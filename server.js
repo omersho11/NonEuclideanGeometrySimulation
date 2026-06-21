@@ -28,7 +28,10 @@ const server = http.createServer((req, res) => {
                 res.end('Server error: ' + error.code + '\n');
             }
         } else {
-            res.writeHead(200, { 'Content-Type': contentType });
+            res.writeHead(200, { 
+                'Content-Type': contentType,
+                'Cache-Control': 'no-store, no-cache, must-revalidate, private'
+            });
             res.end(content, 'utf-8');
         }
     });
