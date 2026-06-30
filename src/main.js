@@ -23,7 +23,7 @@ window.addEventListener('error', (e) => {
 let curvature = 0.0;
 let targetCurvature = 0.0;
 let mapVisible = false;
-let fadeEnabled = true;
+let fadeEnabled = false;
 
 // --- Setup ---
 const container = document.body;
@@ -39,7 +39,7 @@ renderer.setClearColor(0x0a0c10);
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x0a0c10, 0.05);
+scene.fog = null;
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.set(0, 0, 0);
@@ -98,6 +98,7 @@ class Projectile {
         const geom = new THREE.SphereGeometry(0.4, 16, 16);
         const mat = createCustomMaterial(0xffffff); // Bright white ball
         this.mesh = new THREE.Mesh(geom, mat);
+        this.mesh.frustumCulled = false;
         scene.add(this.mesh);
         materialsToUpdate.push(mat);
         this.life = 6.0; // seconds
@@ -172,6 +173,7 @@ materialsToUpdate.push(customMaterial);
 const gridGeom = new THREE.PlaneGeometry(800, 800, 400, 400); // Massive grid
 gridGeom.rotateX(-Math.PI / 2);
 const grid = new THREE.Mesh(gridGeom, customMaterial);
+grid.frustumCulled = false;
 customMaterial.uniforms.u_isGrid = { value: 1.0 }; // Flag to prevent grid from fading
 scene.add(grid);
 
@@ -193,6 +195,7 @@ materialsToUpdate.push(vMat);
 points.forEach((p, index) => {
     const s = new THREE.Mesh(vGeom, vMat);
     s.position.copy(p);
+    s.frustumCulled = false;
     scene.add(s);
     
     const id = index + 1;
@@ -200,6 +203,7 @@ points.forEach((p, index) => {
     materialsToUpdate.push(pMat);
     const pSphere = new THREE.Mesh(vGeom, pMat);
     pSphere.position.copy(p);
+    pSphere.frustumCulled = false;
     pickingScene.add(pSphere);
     
     idToObject[id] = { visual: s, picking: pSphere, index: index };
@@ -212,8 +216,12 @@ materialsToUpdate.push(lineMat);
 function createSubdividedLine(p1, p2, segments = 50) {
     const geom = new THREE.BufferGeometry();
     const positions = new Float32Array((segments + 1) * 3);
+    const uvs = new Float32Array((segments + 1) * 2);
     geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    return new THREE.Line(geom, lineMat);
+    geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    const line = new THREE.Line(geom, lineMat);
+    line.frustumCulled = false;
+    return line;
 }
 
 const lines = [
@@ -350,6 +358,9 @@ container.addEventListener('mousemove', (e) => {
         raycaster.ray.intersectPlane(plane, target);
         
         if (target) {
+            // Target is relative to the camera, so add the player's true unbent base position
+            target.x += controlsManager.baseX;
+            target.z += controlsManager.baseZ;
             points[obj.index].copy(target);
             obj.visual.position.copy(target);
             obj.picking.position.copy(target);
@@ -473,7 +484,7 @@ function animate() {
 
         mapCamera.position.x = controlsManager.baseX;
         mapCamera.position.z = controlsManager.baseZ;
-        mapCamera.up.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+        mapCamera.up.set(0, 0, -1);
         mapCamera.lookAt(controlsManager.baseX, 0, controlsManager.baseZ);
         
         const rect = mapContainer.getBoundingClientRect();

@@ -4,7 +4,6 @@ export const nonEuclideanShader = {
     uniforms: {
         u_curvature: { value: 0.0 },
         u_isMap: { value: 0.0 },
-        u_playerBasePos: { value: new THREE.Vector2(0, 0) },
         u_fadeEnabled: { value: 1.0 },
         color: { value: new THREE.Color(0x3b82f6) }
     },
@@ -16,8 +15,10 @@ export const nonEuclideanShader = {
         varying vec2 vBasePosition;
         varying float vDistance;
         varying float vOriginalR;
+        varying vec2 vUv;
 
         void main() {
+            vUv = uv;
             vOriginalR = 0.0;
             // Transform to world space first so curvature originates from world center
             vec4 worldPos = modelMatrix * vec4(position, 1.0);
@@ -50,25 +51,48 @@ export const nonEuclideanShader = {
                 vDistance = d;
                 gl_Position = projectionMatrix * viewMatrix * worldPos;
             } else {
-                float r = length(worldPos.xz);
+                vec2 offset = worldPos.xz - u_playerBasePos;
+                float r = length(offset);
                 vOriginalR = r;
                 
                 if (r > 0.0001) {
                     if (u_curvature > 0.0) {
                         float R = 1.0 / sqrt(max(u_curvature, 0.00001));
                         float scale = sin(r / R) / (r / R);
-                        worldPos.x *= scale;
-                        worldPos.z *= scale;
-                        // Curve Y downwards to form a sphere
-                        worldPos.y -= R * (1.0 - cos(r / R));
+                        
+                        vec3 P_surf;
+                        P_surf.x = offset.x * scale;
+                        P_surf.z = offset.y * scale;
+                        P_surf.y = -R * (1.0 - cos(r / R));
+                        
+                        vec3 N;
+                        N.x = (offset.x / r) * sin(r / R);
+                        N.z = (offset.y / r) * sin(r / R);
+                        N.y = cos(r / R);
+                        
+                        worldPos.xyz = P_surf + N * worldPos.y;
                     } else if (u_curvature < 0.0) {
                         float R = 1.0 / sqrt(max(-u_curvature, 0.00001));
                         float scale = sinh(r / R) / (r / R);
-                        worldPos.x *= scale;
-                        worldPos.z *= scale;
-                        // Curve Y upwards (cave in) for a hyperbolic shape
-                        worldPos.y += R * (cosh(r / R) - 1.0);
+                        
+                        vec3 P_surf;
+                        P_surf.x = offset.x * scale;
+                        P_surf.z = offset.y * scale;
+                        P_surf.y = R * (cosh(r / R) - 1.0);
+                        
+                        vec3 N;
+                        N.x = -(offset.x / r) * sinh(r / R) / cosh(r / R);
+                        N.z = -(offset.y / r) * sinh(r / R) / cosh(r / R);
+                        N.y = 1.0 / cosh(r / R);
+                        
+                        worldPos.xyz = P_surf + N * worldPos.y;
+                    } else {
+                        worldPos.x = offset.x;
+                        worldPos.z = offset.y;
                     }
+                } else {
+                    worldPos.x = offset.x;
+                    worldPos.z = offset.y;
                 }
                 
                 vWorldPosition = worldPos.xyz;
@@ -82,18 +106,30 @@ export const nonEuclideanShader = {
         uniform float u_fadeEnabled;
         uniform float u_isGrid;
         uniform float u_curvature;
+        uniform float u_useMap;
+        uniform sampler2D u_map;
         uniform vec2 u_playerBasePos;
         varying vec3 vWorldPosition;
         varying float vDistance;
         varying vec2 vBasePosition;
         varying float vOriginalR;
+        varying vec2 vUv;
         
         void main() {
-            if (u_isGrid > 0.5 && u_curvature > 0.0) {
+            // Unconditional texture sample to avoid derivative errors in divergent control flow
+            vec4 texColor = texture2D(u_map, vUv);
+            
+            if (u_curvature > 0.0) {
                 float R = 1.0 / sqrt(max(u_curvature, 0.00001));
                 if (vOriginalR > 3.14159265 * R) {
-                    discard; // Prevent floor from wrapping multiple times
+                    discard; // Prevent anything from wrapping multiple times and clipping through the floor
                 }
+            }
+            
+            vec3 finalColor = color;
+            if (u_useMap > 0.5) {
+                if (texColor.a < 0.5) discard;
+                finalColor = texColor.rgb;
             }
             
             float unbentDistance = distance(u_playerBasePos, vBasePosition);
@@ -116,7 +152,6 @@ export const nonEuclideanShader = {
             vec3 lighting = vec3(0.3) + vec3(0.7) * diff; // Ambient + Diffuse
             
             // Checkerboard pattern using unbent world coordinates
-            vec3 finalColor = color;
             if (u_isGrid > 0.5) {
                 float checker = mod(floor(vBasePosition.x * 0.5) + floor(vBasePosition.y * 0.5), 2.0);
                 if (checker > 0.5) finalColor = color * 0.85;
@@ -140,6 +175,8 @@ export const createCustomMaterial = (colorHex) => {
             u_curvature: { value: 0.0 }, // Updated externally
             u_isMap: { value: 0.0 },
             u_isGrid: { value: 0.0 },
+            u_useMap: { value: 0.0 },
+            u_map: { value: null },
             u_playerBasePos: { value: new THREE.Vector2(0, 0) },
             u_fadeEnabled: { value: 1.0 },
             color: { value: new THREE.Color(colorHex) }
@@ -169,6 +206,7 @@ export const createPickingMaterial = (id) => {
             varying vec2 vBasePosition;
             varying float vDistance;
             varying float vOriginalR;
+            varying vec2 vUv;
             void main() {
                 gl_FragColor = vec4(color, 1.0);
             }

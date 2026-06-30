@@ -15,6 +15,7 @@ export class ControlsManager {
         
         // Initial setup
         this.camera.position.set(0, 0, 0); // Local to group
+        this.camera.rotation.order = 'YXZ'; // Prevent Euler extraction gimbal lock/flips
         
         this.moveState = { forward: false, backward: false, left: false, right: false, up: false, down: false };
         this.direction = new THREE.Vector3();
@@ -75,43 +76,10 @@ export class ControlsManager {
         // Prevent going completely under the floor
         if (this.baseHeight < 0.5) this.baseHeight = 0.5;
 
-        // Calculate mapped position and surface normal
-        const r = Math.sqrt(this.baseX ** 2 + this.baseZ ** 2);
-        let xp = this.baseX;
-        let zp = this.baseZ;
-        let yp = 0;
-        let normal = new THREE.Vector3(0, 1, 0);
-        
-        if (r > 0.0001) {
-            if (curvature > 0.0) {
-                const R = 1.0 / Math.sqrt(curvature);
-                const scale = Math.sin(r / R) / (r / R);
-                xp *= scale;
-                zp *= scale;
-                yp = -R * (1.0 - Math.cos(r / R));
-                normal.set(xp, R + yp, zp).normalize();
-            } else if (curvature < 0.0) {
-                const R = 1.0 / Math.sqrt(-curvature);
-                const scale = Math.sinh(r / R) / (r / R);
-                xp *= scale;
-                zp *= scale;
-                yp = R * (Math.cosh(r / R) - 1.0);
-                normal.set(-xp, R - yp, -zp).normalize();
-            }
-        }
-        
-        // Remove bobbing effect
-        const bobOffset = 0.0;
-
-        // Set camera group position offset by baseHeight + bobOffset along the normal
-        this.cameraGroup.position.set(
-            xp + normal.x * (this.baseHeight + bobOffset),
-            yp + normal.y * (this.baseHeight + bobOffset),
-            zp + normal.z * (this.baseHeight + bobOffset)
-        );
-        
-        // Tilt the camera group to stand upright on the surface
-        this.cameraGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+        // Because the shader maps the world relative to u_playerBasePos,
+        // the camera NEVER physically moves in 3D space! It just bobs up and down.
+        this.cameraGroup.position.set(0, this.baseHeight, 0);
+        this.cameraGroup.quaternion.identity();
     }
 
     lock() {
