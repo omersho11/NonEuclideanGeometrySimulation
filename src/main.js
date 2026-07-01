@@ -27,10 +27,7 @@ let fadeEnabled = false;
 
 // --- Setup ---
 const container = document.body;
-const mapContainer = document.getElementById('map-container');
-const curvatureInput = document.getElementById('curvature');
-const curvatureVal = document.getElementById('curvature-val');
-const trueCurvatureVal = document.getElementById('true-curvature-val');
+const v2MapContainer = document.getElementById('v2-map-container');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
@@ -41,10 +38,10 @@ container.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.fog = null;
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(0, 0, 0);
 
-const mapCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
+const mapCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 1000);
 mapCamera.position.set(0, 20, 0);
 mapCamera.lookAt(0, 0, 0);
 
@@ -56,18 +53,18 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
         e.preventDefault();
         mapVisible = !mapVisible;
-        if (mapVisible) mapContainer.classList.remove('hidden');
-        else mapContainer.classList.add('hidden');
+        if (mapVisible) v2MapContainer.classList.remove('hidden');
+        else v2MapContainer.classList.add('hidden');
     }
     
     // Curvature adjustments with +/- or =/-
     if (e.key === '+' || e.key === '=' || e.key === '-') {
         const step = 0.05;
-        const currentSlider = parseFloat(curvatureInput.value);
+        const currentSlider = parseFloat(v2CurvatureInput.value);
         let newSlider = e.key === '-' ? currentSlider - step : currentSlider + step;
         newSlider = Math.max(-1, Math.min(1, newSlider));
-        curvatureInput.value = newSlider;
-        curvatureInput.dispatchEvent(new Event('input'));
+        v2CurvatureInput.value = newSlider;
+        v2CurvatureInput.dispatchEvent(new Event('input'));
     }
 
     if (e.code === 'KeyF') {
@@ -82,6 +79,10 @@ document.addEventListener('keydown', (e) => {
                 m.uniforms.u_fadeEnabled.value = fadeEnabled ? 1.0 : 0.0;
             }
         });
+    }
+
+    if (e.code === 'KeyR') {
+        walkers.forEach(w => w.restart());
     }
 });
 
@@ -269,20 +270,110 @@ mapMarkerGroup.position.set(0, 15, 0); // Elevated higher
 mapMarkerGroup.visible = false; // Hide from main camera
 scene.add(mapMarkerGroup);
 
-// --- Architectural Scene Loading ---
+// --- Architectural Scene Loading & Walkers ---
 const activeSceneMeshes = [];
-buildScene(scene, 1, materialsToUpdate, activeSceneMeshes);
 
-const sceneSelect = document.getElementById('scene-select');
-sceneSelect.addEventListener('change', (e) => {
-    buildScene(scene, parseInt(e.target.value), materialsToUpdate, activeSceneMeshes);
+// Walker System
+class Walker {
+    constructor(x, z, dx, dz, colorHex) {
+        this.x = x;
+        this.z = z;
+        this.dx = dx;
+        this.dz = dz;
+        
+        // Visual
+        const geom = new THREE.TetrahedronGeometry(0.3);
+        this.mat = createCustomMaterial(colorHex);
+        this.mesh = new THREE.Mesh(geom, this.mat);
+        this.mesh.frustumCulled = false;
+        scene.add(this.mesh);
+        materialsToUpdate.push(this.mat);
+        
+        // Trail
+        this.trailPoints = [];
+        this.trailGeom = new THREE.BufferGeometry();
+        this.trailMat = createCustomMaterial(colorHex);
+        this.trailMat.linewidth = 2;
+        this.trailLine = new THREE.Line(this.trailGeom, this.trailMat);
+        this.trailLine.frustumCulled = false;
+        scene.add(this.trailLine);
+        materialsToUpdate.push(this.trailMat);
+        
+        this.addTrailPoint();
+    }
+    
+    addTrailPoint() {
+        this.trailPoints.push(new THREE.Vector3(this.x, 0.05, this.z));
+        if (this.trailPoints.length > 300) this.trailPoints.shift();
+        this.trailGeom.setFromPoints(this.trailPoints);
+    }
+    
+    restart() {
+        this.x = 0;
+        this.z = 0;
+        this.trailPoints = [];
+        this.addTrailPoint();
+    }
+    
+    update(delta) {
+        this.x += this.dx * delta;
+        this.z += this.dz * delta;
+        
+        // Restart from origin if too far
+        if (Math.hypot(this.x, this.z) > 100.0) {
+            this.restart();
+        }
+        
+        this.mesh.position.set(this.x, 0.3, this.z);
+        
+        // Rotate visually
+        this.mesh.rotation.y += delta;
+        this.mesh.rotation.x += delta * 0.5;
+        
+        // Drop trail every so often
+        if (Math.random() < 0.1) {
+            this.addTrailPoint();
+        }
+    }
+}
+
+// Create 8 walkers in all directions
+const walkers = [];
+for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const speed = 2.0;
+    const color = new THREE.Color().setHSL(i / 8, 1.0, 0.5).getHex();
+    walkers.push(new Walker(0, 0, Math.cos(angle) * speed, Math.sin(angle) * speed, color));
+}
+
+function loadScene(val) {
+    buildScene(scene, val, materialsToUpdate, activeSceneMeshes);
     updateCurvatureUniforms();
+}
+
+function changeFloor(val) {
+    customMaterial.uniforms.u_isGrid.value = val;
+}
+
+loadScene(0); // Default to Empty Space
+changeFloor(1); // Default to Classic Squares
+
+const v2SceneSelect = document.getElementById('v2-scene-select');
+const v2FloorSelect = document.getElementById('v2-floor-select');
+
+v2SceneSelect.addEventListener('change', (e) => {
+    loadScene(parseInt(e.target.value));
+    e.target.blur();
 });
 
-// Sync slider drag to target curvature
+v2FloorSelect.addEventListener('change', (e) => {
+    changeFloor(parseFloat(e.target.value));
+    e.target.blur();
+});
 
 // --- Angle Math ---
-const angleSumElement = document.getElementById('angle-sum');
+const v2AngleSumElement = document.getElementById('v2-angle-sum');
+
 function updateAngleSum() {
     const a = points[0].distanceTo(points[1]);
     const b = points[1].distanceTo(points[2]);
@@ -295,15 +386,16 @@ function updateAngleSum() {
     else if (curvature > 0) sumRadians = Math.PI + 2 * Math.PI * (1 - Math.exp(-curvature * area * 0.1));
     else sumRadians = Math.PI - Math.PI * (1 - Math.exp(curvature * area * 0.1));
     
-    angleSumElement.textContent = (sumRadians * (180 / Math.PI)).toFixed(1) + "°";
+    const txt = (sumRadians * (180 / Math.PI)).toFixed(1) + "°";
+    v2AngleSumElement.textContent = txt;
 }
 updateAngleSum();
 
 // --- Environment Colors ---
 function updateEnvironmentColor() {
-    const cFlat = new THREE.Color(0x0a0c10); // Dark neutral
-    const cSphere = new THREE.Color(0x0f172a); // Deep blue night
-    const cHyper = new THREE.Color(0x2e0615); // Deep red/purple void
+    const cFlat = new THREE.Color(0x0a0c10);
+    const cSphere = new THREE.Color(0x0f172a);
+    const cHyper = new THREE.Color(0x2e0615);
     
     let color = new THREE.Color();
     if (curvature >= 0) {
@@ -313,13 +405,10 @@ function updateEnvironmentColor() {
     }
     
     renderer.setClearColor(color);
-    if (scene.fog) {
-        scene.fog.color.copy(color);
-    }
+    if (scene.fog) scene.fog.color.copy(color);
 }
 
-// --- Curvature Binding ---
-
+// --- Curvature Binding & UI Toggle ---
 function updateCurvatureUniforms() {
     materialsToUpdate.forEach(m => {
         if (m && m.uniforms && m.uniforms.u_curvature) {
@@ -328,14 +417,25 @@ function updateCurvatureUniforms() {
     });
 }
 
-curvatureInput.addEventListener('input', (e) => {
+const v2CurvatureInput = document.getElementById('v2-curvature');
+const v2CurvatureVal = document.getElementById('v2-curvature-val');
+
+function handleCurvatureInput(e) {
     const rawValue = parseFloat(e.target.value);
-    // Non-linear mapping: values near 0 change slowly, but grow fast towards the extremes
     targetCurvature = rawValue * rawValue * rawValue; 
     
-    // Display raw value and true value on UI
-    curvatureVal.textContent = rawValue.toFixed(2); 
-    trueCurvatureVal.textContent = targetCurvature.toFixed(4);
+    v2CurvatureInput.value = rawValue;
+    const displayVal = rawValue.toFixed(2);
+    v2CurvatureVal.textContent = displayVal;
+}
+v2CurvatureInput.addEventListener('input', handleCurvatureInput);
+
+const v2ControlsModal = document.getElementById('v2-controls-modal');
+document.getElementById('btn-v2-controls').addEventListener('click', () => {
+    v2ControlsModal.classList.remove('hidden');
+});
+document.getElementById('btn-close-controls').addEventListener('click', () => {
+    v2ControlsModal.classList.add('hidden');
 });
 
 // --- Interaction ---
@@ -423,13 +523,20 @@ function animate() {
         lastFpsTime = elapsedTime;
     }
     
-    // Smooth curvature morphing
-    curvature += (targetCurvature - curvature) * 5.0 * delta;
+    // Smooth curvature morphing with snap-to-zero to fix Euclidean floating point bugs
+    if (Math.abs(targetCurvature - curvature) < 0.0001) {
+        curvature = targetCurvature;
+    } else {
+        curvature += (targetCurvature - curvature) * 5.0 * delta;
+    }
+    
     updateCurvatureUniforms(); // Push smoothed value to shaders
     updateEnvironmentColor();
     updateAngleSum();
 
     controlsManager.update(delta, curvature);
+    
+    walkers.forEach(w => w.update(delta));
     
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const p = projectiles[i];
@@ -487,20 +594,44 @@ function animate() {
         mapCamera.up.set(0, 0, -1);
         mapCamera.lookAt(controlsManager.baseX, 0, controlsManager.baseZ);
         
-        const rect = mapContainer.getBoundingClientRect();
+        const rect = v2MapContainer.getBoundingClientRect();
         const x = rect.left, y = window.innerHeight - rect.bottom, w = rect.width, h = rect.height;
         
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        
+        materialsToUpdate.forEach(m => {
+            if (m && m.uniforms && m.uniforms.u_mapCenter) {
+                m.uniforms.u_mapCenter.value.set(cx, cy);
+                m.uniforms.u_mapRadius.value = w / 2;
+            }
+        });
+
         renderer.setViewport(x, y, w, h);
         renderer.setScissor(x, y, w, h);
         renderer.setScissorTest(true);
         
-        mapCamera.left = -w/20; mapCamera.right = w/20;
-        mapCamera.top = h/20; mapCamera.bottom = -h/20;
+        let V = 12.5; // Euclidean view radius
+        if (curvature > 0.0001) {
+            const R = 1.0 / Math.sqrt(curvature);
+            V = Math.min(12.5, R * 1.2); // Fit the compact sphere
+        } else if (curvature < -0.0001) {
+            V = 12.5 + Math.abs(curvature) * 10.0; // Zoom out slightly for exponential expansion
+        }
+        
+        mapCamera.left = -V; mapCamera.right = V;
+        mapCamera.top = V; mapCamera.bottom = -V;
         mapCamera.updateProjectionMatrix();
         
         mapMarkerGroup.visible = true; // Show for map render
         renderer.clearDepth();
+        
+        const oldAutoClear = renderer.autoClear;
+        renderer.autoClear = false;
+        
         renderer.render(scene, mapCamera);
+        
+        renderer.autoClear = oldAutoClear;
         mapMarkerGroup.visible = false; // Hide again
 
         materialsToUpdate.forEach(m => {

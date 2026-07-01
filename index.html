@@ -17,55 +17,80 @@
 </head>
 <body>
     <div id="ui-layer">
-        <div class="panel">
-            <h1>Non-Euclidean Lab</h1>
-            <p>Explore curved spaces in real-time.</p>
+        <div id="crosshair"></div>
+        <div id="fps-counter">FPS: 0</div>
+    </div>
+
+    <!-- v2 Mode UI -->
+    <div id="v2-ui-layer">
+        <!-- Top Telemetry Bar -->
+        <div class="v2-top-bar">
+            <div class="v2-metric">
+                <span class="v2-label">CURVATURE</span>
+                <span class="v2-value" id="v2-curvature-val">0.00</span>
+            </div>
+            <div class="v2-metric highlight">
+                <span class="v2-label">ANGLE SUM</span>
+                <span class="v2-value" id="v2-angle-sum">180.0°</span>
+            </div>
+            </div>
+        </div>
+
+        <!-- Left Sidebar Controls -->
+        <div class="v2-sidebar">
+            <h2 class="v2-title">ENVIRONMENT</h2>
             
-            <div class="control-group">
-                <label for="scene-select">Environment</label>
-                <select id="scene-select">
+            <div class="v2-control">
+                <label for="v2-scene-select">TOPOLOGY</label>
+                <select id="v2-scene-select">
+                    <option value="0">Empty Space</option>
                     <option value="1">Forest & Torus</option>
-                    <option value="0">Standard Cube</option>
                     <option value="2">Parallel Lines</option>
-                    <option value="3">Riemann City (Wrap)</option>
-                    <option value="4">Geometry Quirks (Looping)</option>
+                    <option value="3">Geometry Quirks (Looping)</option>
                 </select>
             </div>
 
-            <div class="control-group">
-                <label for="curvature">Curvature</label>
-                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; opacity: 0.8; margin-bottom: 4px;">
-                    <span>Slider: <span id="curvature-val">0</span></span>
-                    <span>True: <span id="true-curvature-val">0</span></span>
-                </div>
-                <input type="range" id="curvature" min="-1" max="1" step="0.01" value="0">
+            <div class="v2-control">
+                <label for="v2-floor-select">FLOOR TILES</label>
+                <select id="v2-floor-select">
+                    <option value="1">Classic Squares</option>
+                    <option value="2">Ethereal Hexagons</option>
+                    <option value="3">Triangular Matrix</option>
+                    <option value="4">Voronoi Quantum Dots</option>
+                    <option value="5">Interference Waves</option>
+                </select>
             </div>
 
-            <div class="metrics">
-                <h3>Triangle Angle Sum</h3>
-                <div class="angle-val" id="angle-sum">180°</div>
+            <div class="v2-control">
+                <label for="v2-curvature">SPACE WARP</label>
+                <input type="range" id="v2-curvature" min="-1" max="1" step="0.01" value="0">
             </div>
-
-            <div class="instructions">
-                <ul>
-                    <li><strong>WASD:</strong> Move</li>
-                    <li><strong>Mouse:</strong> Look</li>
-                    <li><strong>Space/Shift:</strong> Fly Up/Down</li>
-                    <li><strong>Left Click:</strong> Shoot Ball</li>
-                    <li><strong>+/-:</strong> Adjust Curvature</li>
-                    <li><strong>TAB:</strong> Toggle 2D Map</li>
-                    <li><strong>F:</strong> Toggle Fog/Fade</li>
-                </ul>
-            </div>
+            
+            <button id="btn-v2-controls" class="v2-btn-minimal" style="width: 100%; margin-top: 1rem; border-color: rgba(96,165,250,0.5);">Show Controls</button>
         </div>
-        
-        <div id="crosshair"></div>
-        
-        <div id="fps-counter">FPS: 0</div>
+
+        <!-- v2 Radar Map -->
+        <div id="v2-map-container" class="hidden">
+            <!-- Radar sweep removed as requested -->
+        </div>
     </div>
     
-    <div id="map-container" class="hidden">
-        <!-- The 2D projection map will be rendered here by a separate WebGL pass -->
+    <!-- v2 Controls Modal -->
+    <div id="v2-controls-modal" class="hidden">
+        <div class="v2-modal-content">
+            <h2 class="v2-title" style="margin-bottom: 1rem;">CONTROLS</h2>
+            <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.8rem; color: #94a3b8;">
+                <li><strong style="color: #e2e8f0; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; font-family: monospace;">WASD</strong> Move</li>
+                <li><strong style="color: #e2e8f0; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; font-family: monospace;">Mouse</strong> Look</li>
+                <li><strong style="color: #e2e8f0; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; font-family: monospace;">Space/Shift</strong> Fly Up/Down</li>
+                <li><strong style="color: #e2e8f0; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; font-family: monospace;">Left Click</strong> Shoot Ball</li>
+                <li><strong style="color: #e2e8f0; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; font-family: monospace;">+/-</strong> Adjust Curvature</li>
+                <li><strong style="color: #e2e8f0; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; font-family: monospace;">TAB</strong> Toggle Map</li>
+                <li><strong style="color: #e2e8f0; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; font-family: monospace;">F</strong> Toggle Fog/Fade</li>
+                <li><strong style="color: #e2e8f0; background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; font-family: monospace;">R</strong> Reset Drones</li>
+            </ul>
+            <button id="btn-close-controls" class="v2-btn-minimal" style="width: 100%; margin-top: 1.5rem;">Close</button>
+        </div>
     </div>
 
     <script type="module" src="src/main.js"></script>

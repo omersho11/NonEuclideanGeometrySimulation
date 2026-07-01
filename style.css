@@ -231,3 +231,226 @@ select:focus {
 canvas {
     display: block;
 }
+
+/* UI Toggle Classes */
+.hidden {
+    display: none !important;
+}
+
+.ui-toggle-btn {
+    width: 100%;
+    padding: 0.75rem;
+    margin-top: 1rem;
+    background: linear-gradient(135deg, var(--accent), #2563eb);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.ui-toggle-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -10px var(--accent);
+}
+
+/* =========================================
+   v2 MODE HUD (PREMIUM UI)
+   ========================================= */
+
+#v2-ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 20;
+    font-family: 'Inter', sans-serif;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Top Telemetry Bar */
+.v2-top-bar {
+    position: absolute;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10, 15, 25, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(100, 150, 255, 0.2);
+    border-radius: 30px;
+    padding: 0.5rem 1.5rem;
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    pointer-events: auto;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(59, 130, 246, 0.1);
+}
+
+.v2-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.v2-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: #94a3b8;
+    margin-bottom: 0.2rem;
+}
+
+.v2-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 10px rgba(255,255,255,0.3);
+}
+
+.v2-metric.highlight .v2-value {
+    color: #60a5fa;
+    text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+}
+
+.v2-btn-minimal {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #e2e8f0;
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.v2-btn-minimal:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.4);
+}
+
+/* Left Sidebar Controls */
+.v2-sidebar {
+    position: absolute;
+    top: 50%;
+    left: 2rem;
+    transform: translateY(-50%);
+    background: rgba(10, 15, 25, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(100, 150, 255, 0.2);
+    border-radius: 16px;
+    padding: 1.5rem;
+    width: 280px;
+    pointer-events: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.v2-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    color: #60a5fa;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(96, 165, 250, 0.2);
+    padding-bottom: 0.5rem;
+}
+
+.v2-control {
+    margin-bottom: 1.5rem;
+}
+
+.v2-control label {
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: #94a3b8;
+    margin-bottom: 0.75rem;
+}
+
+.v2-control select {
+    width: 100%;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff;
+    padding: 0.5rem;
+    border-radius: 6px;
+    font-family: inherit;
+    appearance: none;
+    cursor: pointer;
+}
+
+.v2-control select:focus {
+    outline: none;
+    border-color: #60a5fa;
+    box-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
+}
+
+.v2-control input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    background: transparent;
+}
+
+.v2-control input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 14px;
+    width: 14px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 10px #fff;
+    cursor: pointer;
+    margin-top: -6px;
+}
+
+.v2-control input[type=range]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 2px;
+    background: rgba(96, 165, 250, 0.3);
+    border-radius: 1px;
+}
+
+/* Radar Map */
+#v2-map-container {
+    position: absolute;
+    bottom: 2rem;
+    right: 2rem;
+    width: 250px;
+    height: 250px;
+    pointer-events: none;
+    border-radius: 50%;
+}
+
+#v2-map-container::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(96, 165, 250, 0.3);
+    box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(96, 165, 250, 0.2);
+}
+
+/* v2 Controls Modal */
+#v2-controls-modal {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: auto;
+}
+.v2-modal-content {
+    background: rgba(10, 15, 25, 0.8);
+    border: 1px solid rgba(100, 150, 255, 0.3);
+    border-radius: 16px;
+    padding: 2rem;
+    width: 320px;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.8);
+}

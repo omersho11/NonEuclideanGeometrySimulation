@@ -34,18 +34,7 @@ export function buildScene(scene, index, materialsToUpdate, activeMeshes) {
     });
     activeMeshes.length = 0;
 
-    if (index === 0) {
-        // Standard Cube
-        const boxGeom = new THREE.BoxGeometry(10, 10, 10, 30, 30, 30);
-        const boxMat = createCustomMaterial(0xf59e0b);
-        materialsToUpdate.push(boxMat);
-        const box = new THREE.Mesh(boxGeom, boxMat);
-        box.position.set(0, 5, -15);
-        box.frustumCulled = false;
-        scene.add(box);
-        activeMeshes.push(box);
-        
-    } else if (index === 1) {
+    if (index === 1) {
         // Forest & Torus
         const pillarGeom = new THREE.BoxGeometry(1, 15, 1, 10, 50, 10);
         const pillarMat = createCustomMaterial(0x10b981);
@@ -101,48 +90,6 @@ export function buildScene(scene, index, materialsToUpdate, activeMeshes) {
         activeMeshes.push(cube);
         
     } else if (index === 3) {
-        // Riemann City (Demonstrates multi-sheeted spherical space)
-        // Spaced out along Z axis to show different locations overlapping on the sphere
-        const buildingGeom = new THREE.BoxGeometry(4, 15, 4, 10, 20, 10);
-        
-        const districts = [
-            { z: 0, color: 0xef4444 },    // Red District
-            { z: 80, color: 0x10b981 },   // Green District
-            { z: 160, color: 0x3b82f6 },  // Blue District
-            { z: 240, color: 0xf59e0b }   // Yellow District
-        ];
-        
-        districts.forEach(district => {
-            const dMat = createCustomMaterial(district.color);
-            materialsToUpdate.push(dMat);
-            
-            // Build a small cluster of buildings
-            for (let x = -10; x <= 10; x += 10) {
-                for (let z = -10; z <= 10; z += 10) {
-                    if (x === 0 && z === 0) continue; // Leave center empty
-                    const b = new THREE.Mesh(buildingGeom, dMat);
-                    // Add some height variation
-                    const hOffset = Math.random() * 5;
-                    b.position.set(x, 7.5 + hOffset, district.z + z);
-                    b.scale.y = 1.0 + (hOffset / 15.0);
-                    b.frustumCulled = false;
-                    scene.add(b);
-                    activeMeshes.push(b);
-                }
-            }
-            
-            // Add a central marker for the district
-            const centerGeom = new THREE.TorusGeometry(3, 1, 16, 32);
-            centerGeom.rotateX(Math.PI / 2);
-            const cMat = createCustomMaterial(0xffffff);
-            materialsToUpdate.push(cMat);
-            const center = new THREE.Mesh(centerGeom, cMat);
-            center.position.set(0, 10, district.z);
-            center.frustumCulled = false;
-            scene.add(center);
-            activeMeshes.push(center);
-        });
-    } else if (index === 4) {
         // Geometry Quirks (Demonstrates looping and parallel lines)
         
         // 1. Long corridor of arches to show looping
