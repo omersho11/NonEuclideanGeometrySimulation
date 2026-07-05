@@ -600,10 +600,11 @@ function animate() {
         const cx = x + w / 2;
         const cy = y + h / 2;
         
+        const pixelRatio = window.devicePixelRatio;
         materialsToUpdate.forEach(m => {
             if (m && m.uniforms && m.uniforms.u_mapCenter) {
-                m.uniforms.u_mapCenter.value.set(cx, cy);
-                m.uniforms.u_mapRadius.value = w / 2;
+                m.uniforms.u_mapCenter.value.set(cx * pixelRatio, cy * pixelRatio);
+                m.uniforms.u_mapRadius.value = (w / 2) * pixelRatio;
             }
         });
 
